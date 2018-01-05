@@ -7,8 +7,6 @@ use League\CLImate\CLImate;
 use Rx\Observable;
 use Rx\Observer\CallbackObserver;
 
-// TODO use env variable for config
-
 $climate = new CLImate;
 $climate->arguments->add([
     'file' => [
@@ -40,6 +38,8 @@ if ($climate->arguments->get('help')) {
     $help[] = 'php import.php --file="./storage/BDD CIA.xlsx" --table=companies';
     die(implode("\n", $help));
 }
+
+// Lazyness of creating a symfony console
 define('FILE', $climate->arguments->get('file'));
 define('TABLE', $climate->arguments->get('table'));
 
@@ -57,15 +57,10 @@ function to_column_name($str)
 
 
 $reader = ReaderFactory::create(Type::XLSX);
-
 $reader->open(FILE);
-
 $reader->getSheetIterator()->rewind();
 $sheet = $reader->getSheetIterator()->current();
-
-
 $sheet->getRowIterator()->rewind();
-
 
 // Start by building columns name
 Observable::fromIterator($sheet->getRowIterator())
@@ -77,6 +72,7 @@ Observable::fromIterator($sheet->getRowIterator())
     ->filter(\Rx\notEqualTo(""))
     // Get proper column name
     ->map('to_column_name')
+    // ID for companies
     ->map(function ($col) {
         if ($col == 'factset_code') {
             $col = 'id';
@@ -93,8 +89,7 @@ Observable::fromIterator($sheet->getRowIterator())
             "user" => $_ENV['DATABASE_USER'],
             "password" => $_ENV['DATABASE_PASSWORD'],
             "database" => $_ENV['DATABASE_NAME'],
-            "auto_disconnect" => true //This option will force the client to disconnect as soon as it completes.  The connection will not be returned to the connection pool.
-
+            "auto_disconnect" => true
         ]);
 
         $sheet->getRowIterator()->rewind();
@@ -114,6 +109,7 @@ Observable::fromIterator($sheet->getRowIterator())
                 $total++;
                 return $insert;
             })
+            // Insert into postgres
             ->flatMap(function ($row) use ($head, $postgres) {
                 $keys = implode(',', array_keys($row));
                 $values = implode("','", array_values($row));
@@ -122,7 +118,7 @@ Observable::fromIterator($sheet->getRowIterator())
                 //echo $query."\n\n";
                 return $postgres->query($query);
             })
-            // Insert into mongodb
+            // Logging
             ->subscribe(
                 new CallbackObserver(
                     null,
